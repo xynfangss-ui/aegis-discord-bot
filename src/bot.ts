@@ -19,8 +19,8 @@ import {
 } from "discord.js";
 import { createServer } from "node:http";
 
-const token = process.env.DISCORD_TOKEN;
-if (!token) throw new Error("DISCORD_TOKEN is required.");
+const token = process.env.DISCORD_TOKEN || process.env.TOKEN;
+if (!token) throw new Error("TOKEN or DISCORD_TOKEN is required.");
 
 const brand = 0x7c5cff;
 const success = 0x39d98a;
