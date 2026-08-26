@@ -75,8 +75,14 @@ const commands = [
 commands[0].setDefaultMemberPermissions(null);
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
+
+const channelBlueprint = {
+  HACKATHONS: ["📢・hackathon-alerts", "🏆・hackathon-discussion", "👥・find-a-team", "💡・hackathon-ideas", "📝・submission-help", "🎤・pitch-feedback", "🏅・results"],
+  "TEAM FINDER": ["🔎・looking-for-team", "💻・developers", "🎨・designers", "🤖・ai-ml", "🔐・cybersecurity", "📊・data", "📣・marketing", "💼・business", "🎥・content"],
+  STARTUPS: ["💡・startup-ideas", "🔍・validate-your-idea", "👥・find-a-cofounder", "📈・business", "💰・funding", "🎤・pitch-room", "🚀・startup-showcase"],
+} as const;
 
 async function finishGiveaway(messageId: string) {
   const giveaway = giveaways.get(messageId);
@@ -104,6 +110,44 @@ const registerCommands = async () => {
 client.once(Events.ClientReady, async () => {
   await registerCommands();
   console.info(`Logged in as ${client.user?.tag}. Commands registered.`);
+});
+
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot || message.content.trim().toLowerCase() !== ".setupchannels" || !message.guild) return;
+  if (!message.member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    await message.reply("You need **Manage Server** permission to run `.setupchannels`.");
+    return;
+  }
+  try {
+    const created: string[] = [];
+    for (const [categoryName, channelNames] of Object.entries(channelBlueprint)) {
+      let category = message.guild.channels.cache.find((channel) => channel.type === ChannelType.GuildCategory && channel.name === categoryName);
+      if (!category) {
+        category = await message.guild.channels.create({ name: categoryName, type: ChannelType.GuildCategory });
+        created.push(`**${categoryName}** category`);
+      }
+      const categoryId = category.id;
+      for (const channelName of channelNames) {
+        const exists = message.guild.channels.cache.find((channel) => channel.parentId === categoryId && channel.name === channelName);
+        if (!exists) {
+          await message.guild.channels.create({ name: channelName, type: ChannelType.GuildText, parent: categoryId });
+          created.push(`#${channelName}`);
+        }
+      }
+    }
+    await message.reply({
+      embeds: [
+        embed(
+          "Server channels are ready",
+          created.length ? `Created **${created.length}** new item${created.length === 1 ? "" : "s"} across your hackathon, team finder, and startup spaces.` : "Everything is already set up. No duplicate channels were created.",
+          success,
+        ),
+      ],
+    });
+  } catch (error) {
+    console.error("Channel setup failed", error);
+    await message.reply("I couldn’t finish setting up the channels. Make sure my role has **Manage Channels** and is above the relevant roles.");
+  }
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
