@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  CategoryChannel,
   ChannelType,
   ChatInputCommandInteraction,
   Client,
@@ -83,6 +84,7 @@ const channelBlueprint = {
   "TEAM FINDER": ["🔎・looking-for-team", "💻・developers", "🎨・designers", "🤖・ai-ml", "🔐・cybersecurity", "📊・data", "📣・marketing", "💼・business", "🎥・content"],
   STARTUPS: ["💡・startup-ideas", "🔍・validate-your-idea", "👥・find-a-cofounder", "📈・business", "💰・funding", "🎤・pitch-room", "🚀・startup-showcase"],
 } as const;
+const readOnlyChannels = new Set(["📢・hackathon-alerts", "🏅・results"]);
 
 async function finishGiveaway(messageId: string) {
   const giveaway = giveaways.get(messageId);
@@ -150,6 +152,95 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot || message.content.trim().toLowerCase() !== ".permschannels" || !message.guild) return;
+  if (!message.member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    await message.reply("You need **Manage Server** permission to run `.permschannels`.");
+    return;
+  }
+  try {
+    const botMember = message.guild.members.me;
+    if (!botMember) {
+      await message.reply("I couldn’t resolve my server member record. Try again in a moment.");
+      return;
+    }
+    const moderatorRole = process.env.MOD_ROLE_ID ? message.guild.roles.cache.get(process.env.MOD_ROLE_ID) : undefined;
+    let updated = 0;
+    let missing = 0;
+    for (const [categoryName, channelNames] of Object.entries(channelBlueprint)) {
+      const category = message.guild.channels.cache.find((channel): channel is CategoryChannel => channel.type === ChannelType.GuildCategory && channel.name === categoryName);
+      if (!category) {
+        missing += channelNames.length;
+        continue;
+      }
+      await category.permissionOverwrites.edit(message.guild.roles.everyone, {
+        ViewChannel: true,
+        ReadMessageHistory: true,
+        SendMessages: true,
+      });
+      await category.permissionOverwrites.edit(botMember, {
+        ViewChannel: true,
+        ReadMessageHistory: true,
+        SendMessages: true,
+        ManageMessages: true,
+        ManageChannels: true,
+        EmbedLinks: true,
+        AttachFiles: true,
+      });
+      if (moderatorRole) {
+        await category.permissionOverwrites.edit(moderatorRole, {
+          ViewChannel: true,
+          ReadMessageHistory: true,
+          SendMessages: true,
+          ManageMessages: true,
+        });
+      }
+      for (const channelName of channelNames) {
+        const channel = message.guild.channels.cache.find((candidate) => candidate.parentId === category.id && candidate.name === channelName);
+        if (!channel || !("permissionOverwrites" in channel)) {
+          missing++;
+          continue;
+        }
+        await channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+          ViewChannel: true,
+          ReadMessageHistory: true,
+          SendMessages: !readOnlyChannels.has(channelName),
+        });
+        await channel.permissionOverwrites.edit(botMember, {
+          ViewChannel: true,
+          ReadMessageHistory: true,
+          SendMessages: true,
+          ManageMessages: true,
+          ManageChannels: true,
+          EmbedLinks: true,
+          AttachFiles: true,
+        });
+        if (moderatorRole) {
+          await channel.permissionOverwrites.edit(moderatorRole, {
+            ViewChannel: true,
+            ReadMessageHistory: true,
+            SendMessages: true,
+            ManageMessages: true,
+          });
+        }
+        updated++;
+      }
+    }
+    await message.reply({
+      embeds: [
+        embed(
+          "Channel permissions updated",
+          `Applied the public channel rules and bot permissions to **${updated}** channel${updated === 1 ? "" : "s"}.${missing ? `\n\n**${missing}** channel${missing === 1 ? " is" : "s are"} missing — run \`.setupchannels\` first.` : ""}`,
+          success,
+        ),
+      ],
+    });
+  } catch (error) {
+    console.error("Channel permissions setup failed", error);
+    await message.reply("I couldn’t update the channel permissions. Make sure my role has **Manage Channels**.");
+  }
+});
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isButton() && interaction.customId === "ticket:create") {
@@ -185,7 +276,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     const member = interaction.member as GuildMember;
     if (interaction.commandName === "help") {
-      return interaction.reply({ embeds: [embed("Aegis command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel`")], ephemeral: true });
+      return interaction.reply({ embeds: [embed("Aegis command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel`\n\n**Server setup**\n`.setupchannels` `.permschannels`")], ephemeral: true });
     }
     if (!interaction.guild) return interaction.reply({ content: "This command only works inside a server.", ephemeral: true });
     if (interaction.commandName === "ban" || interaction.commandName === "kick") {
