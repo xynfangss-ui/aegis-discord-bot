@@ -1,13 +1,20 @@
 # Aegis Discord Bot
 
-A focused Discord community bot with moderation, giveaways, and private support tickets. No database or dashboard.
+A focused Discord community bot with moderation, giveaways, private support tickets, and a one-command community channel setup. No database or dashboard.
 
 ## Commands
 
 - Moderation: `/ban`, `/kick`, `/timeout`, `/warn`, `/purge`, `/lock`, `/unlock`, `/slowmode`
 - Giveaways: `/giveaway start`, `/giveaway end`, `/giveaway reroll`
 - Tickets: `/ticket-panel`
+- Server layout: `.setupchannels`
 - Help: `/help`
+
+## Channel setup
+
+Run `.setupchannels` in your server as a member with Manage Server. The bot creates HACKATHONS, TEAM FINDER, and STARTUPS categories with the requested channels. It is safe to run more than once and skips anything already present.
+
+Enable **Server Members Intent** and **Message Content Intent** in the Discord Developer Portal.
 
 ## Deploy to Railway
 
