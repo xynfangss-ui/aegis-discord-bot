@@ -1,6 +1,6 @@
 # Aegis Discord Bot
 
-A focused Discord community bot with moderation, giveaways, private support tickets, and a one-command community channel setup. No database or dashboard.
+A focused Discord community bot with moderation, giveaways, private support tickets, and server setup commands. No database or dashboard.
 
 ## Commands
 
@@ -8,11 +8,14 @@ A focused Discord community bot with moderation, giveaways, private support tick
 - Giveaways: `/giveaway start`, `/giveaway end`, `/giveaway reroll`
 - Tickets: `/ticket-panel`
 - Server layout: `.setupchannels`
+- Channel permissions: `.permschannels`
 - Help: `/help`
 
-## Channel setup
+## Server setup
 
-Run `.setupchannels` in your server as a member with Manage Server. The bot creates HACKATHONS, TEAM FINDER, and STARTUPS categories with the requested channels. It is safe to run more than once and skips anything already present.
+Run `.setupchannels` with Manage Server to create the HACKATHONS, TEAM FINDER, and STARTUPS categories and channels. It skips anything already present.
+
+Run `.permschannels` with Manage Server to apply public channel permissions, make alerts and results read-only, and explicitly grant the bot the permissions it needs. Add `MOD_ROLE_ID` if you want a moderator role to receive access and message-management permissions too.
 
 Enable **Server Members Intent** and **Message Content Intent** in the Discord Developer Portal.
 
@@ -23,6 +26,6 @@ Enable **Server Members Intent** and **Message Content Intent** in the Discord D
 3. Give it Manage Channels, Manage Messages, Moderate Members, Kick Members, and Ban Members.
 4. Deploy this repository to Railway.
 5. Add your Railway secret as `TOKEN`. `DISCORD_TOKEN` is also supported.
-6. Optionally add `DISCORD_GUILD_ID` and `TICKET_ROLE_ID`.
+6. Optionally add `DISCORD_GUILD_ID`, `TICKET_ROLE_ID`, and `MOD_ROLE_ID`.
 
 Railway provides `PORT` automatically. Active giveaways and warnings are held in memory, so a restart clears them.
