@@ -41,8 +41,55 @@ const durationMs = (input: string) => {
 const embed = (title: string, description: string, color = brand) =>
   new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).setTimestamp();
 
+const robloxGroupId = process.env.ROBLOX_GROUP_ID;
+const robloxGroupUrl = process.env.ROBLOX_GROUP_URL || (robloxGroupId ? `https://www.roblox.com/communities/${robloxGroupId}` : "");
+const robuxProducts = [1, 2, 3].map((number) => ({
+  name: process.env[`ROBUX_ITEM_${number}_NAME`] || `TNM Access Shirt ${number}`,
+  price: process.env[`ROBUX_ITEM_${number}_PRICE`] || "Not configured",
+  assetId: process.env[`ROBUX_ITEM_${number}_ID`],
+  url: process.env[`ROBUX_ITEM_${number}_URL`],
+}));
+const syncRoleMappings = new Map<string, string>();
+
+const robloxRequest = async (path: string, init?: RequestInit) => {
+  const response = await fetch(`https://${path}`, {
+    ...init,
+    headers: { "content-type": "application/json", ...(init?.headers || {}) },
+  });
+  if (!response.ok) throw new Error(`Roblox API request failed with ${response.status}`);
+  return response.json() as Promise<Record<string, any>>;
+};
+
+const findRobloxUser = async (username: string) => {
+  const result = await robloxRequest("users.roblox.com/v1/usernames/users", {
+    method: "POST",
+    body: JSON.stringify({ usernames: [username], excludeBannedUsers: false }),
+  });
+  return result.data?.[0] as { id: number; name: string; displayName: string } | undefined;
+};
+
+const findRobloxGroupRole = async (userId: number) => {
+  if (!robloxGroupId) return undefined;
+  const result = await robloxRequest(`groups.roblox.com/v2/users/${userId}/groups/roles`);
+  return result.data?.find((entry: { group?: { id: number }; role?: { name: string; rank: number } }) => String(entry.group?.id) === robloxGroupId)?.role as { name: string; rank: number } | undefined;
+};
+
 const commands = [
   new SlashCommandBuilder().setName("help").setDescription("See all bot commands."),
+  new SlashCommandBuilder().setName("robux").setDescription("Show the three TNM access shirts and their Robux prices."),
+  new SlashCommandBuilder().setName("check").setDescription("Check a Roblox user's shirt ownership and avatar status.")
+    .addStringOption((o) => o.setName("username").setDescription("Roblox username").setRequired(true)),
+  new SlashCommandBuilder().setName("payments").setDescription("Show the available payment methods."),
+  new SlashCommandBuilder().setName("group").setDescription("Get the TNM Roblox community link."),
+  new SlashCommandBuilder().setName("ping").setDescription("Check bot and Discord API latency."),
+  new SlashCommandBuilder().setName("rank").setDescription("Check a Roblox rank and sync the matching Discord role.")
+    .addStringOption((o) => o.setName("username").setDescription("Roblox username").setRequired(true))
+    .addStringOption((o) => o.setName("rank").setDescription("Expected Roblox group role name").setRequired(true))
+    .addUserOption((o) => o.setName("member").setDescription("Discord member to sync").setRequired(true)),
+  new SlashCommandBuilder().setName("syncrank").setDescription("Manage Roblox-to-Discord rank mappings.")
+    .addSubcommand((s) => s.setName("set").setDescription("Map a Roblox group role to a Discord role.")
+      .addStringOption((o) => o.setName("roblox_role").setDescription("Roblox group role name").setRequired(true))
+      .addRoleOption((o) => o.setName("discord_role").setDescription("Discord role to assign").setRequired(true))),
   new SlashCommandBuilder().setName("ban").setDescription("Ban a member.")
     .addUserOption((o) => o.setName("user").setDescription("Member to ban").setRequired(true))
     .addStringOption((o) => o.setName("reason").setDescription("Why they are being banned").setRequired(false)),
@@ -73,7 +120,9 @@ const commands = [
       .addStringOption((o) => o.setName("message_id").setDescription("Giveaway message ID").setRequired(true))),
   new SlashCommandBuilder().setName("ticket-panel").setDescription("Post the support ticket panel."),
 ].map((command) => command.setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild));
-commands[0].setDefaultMemberPermissions(null);
+for (const command of commands) {
+  if (["help", "robux", "check", "payments", "group", "ping"].includes(command.name)) command.setDefaultMemberPermissions(null);
+}
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -276,9 +325,108 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     const member = interaction.member as GuildMember;
     if (interaction.commandName === "help") {
-      return interaction.reply({ embeds: [embed("Aegis command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel`\n\n**Server setup**\n`.setupchannels` `.permschannels`")], ephemeral: true });
+      return interaction.reply({ embeds: [embed("Aegis command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel`\n\n**Roblox**\n`/robux` `/check` `/payments` `/group` `/rank` `/syncrank set`\n\n**Server setup**\n`.setupchannels` `.permschannels`")], ephemeral: true });
+    }
+    if (interaction.commandName === "robux") {
+      return interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(brand)
+            .setTitle("TNM access shirts")
+            .setDescription("Choose the access shirt that matches your role.")
+            .addFields(robuxProducts.map((product) => ({ name: product.name, value: `${product.price} Robux${product.url ? `\n[View shirt](${product.url})` : ""}`, inline: true })))
+            .setTimestamp(),
+        ],
+      });
+    }
+    if (interaction.commandName === "payments") {
+      const methods = [
+        ["Venmo", process.env.VENMO_USERNAME],
+        ["Cash App", process.env.CASHAPP_USERNAME],
+        ["PayPal", process.env.PAYPAL_USERNAME],
+        ["Zelle", process.env.ZELLE_CONTACT],
+        ["Apple Pay", process.env.APPLE_PAY_CONTACT],
+      ];
+      const configured = methods.filter(([, value]) => value).map(([name, value]) => `**${name}:** ${value}`);
+      return interaction.reply({
+        embeds: [
+          embed(
+            "Payment methods",
+            configured.length ? configured.join("\n") : "Payment details have not been configured yet. Ask an administrator to add the payment environment variables.",
+          ),
+        ],
+      });
+    }
+    if (interaction.commandName === "group") {
+      return interaction.reply({
+        embeds: [
+          embed(
+            "TNM Roblox community",
+            robloxGroupUrl ? `[Join the TNM Roblox community](${robloxGroupUrl})` : "The Roblox group link has not been configured yet. Ask an administrator to set `ROBLOX_GROUP_URL`.",
+          ),
+        ],
+      });
+    }
+    if (interaction.commandName === "ping") {
+      const roundTrip = Date.now() - interaction.createdTimestamp;
+      return interaction.reply({ embeds: [embed("Pong", `Bot latency: **${roundTrip}ms**\nDiscord API latency: **${client.ws.ping}ms**`, success)] });
+    }
+    if (interaction.commandName === "check") {
+      const username = interaction.options.getString("username", true);
+      await interaction.deferReply();
+      const robloxUser = await findRobloxUser(username);
+      if (!robloxUser) return interaction.editReply({ embeds: [embed("Roblox user not found", `I couldn't find a Roblox user named **${username}**.`, danger)] });
+      const configuredIds = new Set(robuxProducts.flatMap((product) => product.assetId ? [Number(product.assetId)] : []));
+      const [inventory, wearing] = await Promise.allSettled([
+        robloxRequest(`inventory.roblox.com/v1/users/${robloxUser.id}/items/Asset?assetTypes=Shirt&sortOrder=Desc&limit=100`),
+        robloxRequest(`avatar.roblox.com/v1/users/${robloxUser.id}/currently-wearing`),
+      ]);
+      const ownedIds = inventory.status === "fulfilled" ? new Set((inventory.value.data || []).map((item: { id: number }) => item.id)) : new Set<number>();
+      const wornIds = wearing.status === "fulfilled" ? new Set((wearing.value.assetIds || []) as number[]) : new Set<number>();
+      const owned = configuredIds.size ? [...configuredIds].some((id) => ownedIds.has(id)) : false;
+      const worn = configuredIds.size ? [...configuredIds].some((id) => wornIds.has(id)) : false;
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(brand)
+            .setTitle(`Roblox check: ${robloxUser.displayName}`)
+            .setURL(`https://www.roblox.com/users/${robloxUser.id}/profile`)
+            .setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${robloxUser.id}&width=150&height=150&format=png`)
+            .addFields(
+              { name: "Username", value: `@${robloxUser.name}`, inline: true },
+              { name: "Configured shirt owned", value: configuredIds.size ? (inventory.status === "fulfilled" ? (owned ? "Yes" : "No") : "Private or unavailable") : "Not configured", inline: true },
+              { name: "Currently wearing", value: configuredIds.size ? (wearing.status === "fulfilled" ? (worn ? "Yes" : "No") : "Unavailable") : "Not configured", inline: true },
+            )
+            .setDescription(configuredIds.size ? "Checked against the configured TNM access shirt IDs." : "Add `ROBUX_ITEM_1_ID`, `ROBUX_ITEM_2_ID`, and `ROBUX_ITEM_3_ID` to enable shirt ownership checks.")
+            .setTimestamp(),
+        ],
+      });
     }
     if (!interaction.guild) return interaction.reply({ content: "This command only works inside a server.", ephemeral: true });
+    if (interaction.commandName === "syncrank") {
+      const robloxRole = interaction.options.getString("roblox_role", true).trim().toLowerCase();
+      const discordRole = interaction.options.getRole("discord_role", true);
+      syncRoleMappings.set(robloxRole, discordRole.id);
+      return interaction.reply({ embeds: [embed("Rank mapping saved", `Roblox role **${robloxRole}** now syncs to Discord role **${discordRole.name}**.`, success)] });
+    }
+    if (interaction.commandName === "rank") {
+      const username = interaction.options.getString("username", true);
+      const expectedRole = interaction.options.getString("rank", true).trim().toLowerCase();
+      const discordUser = interaction.options.getUser("member", true);
+      await interaction.deferReply();
+      const robloxUser = await findRobloxUser(username);
+      if (!robloxUser) return interaction.editReply({ embeds: [embed("Roblox user not found", `I couldn't find a Roblox user named **${username}**.`, danger)] });
+      const groupRole = await findRobloxGroupRole(robloxUser.id);
+      if (!groupRole) return interaction.editReply({ embeds: [embed("Roblox group rank not found", robloxGroupId ? `**${robloxUser.name}** is not in the configured Roblox group.` : "Set `ROBLOX_GROUP_ID` before using `/rank`.", danger)] });
+      if (groupRole.name.trim().toLowerCase() !== expectedRole) return interaction.editReply({ embeds: [embed("Rank mismatch", `Roblox reports **${robloxUser.name}** as **${groupRole.name}**, not **${expectedRole}**.`, danger)] });
+      const roleId = syncRoleMappings.get(expectedRole);
+      const discordMember = await interaction.guild.members.fetch(discordUser.id).catch(() => null);
+      const discordRole = roleId ? interaction.guild.roles.cache.get(roleId) : undefined;
+      if (!discordMember || !discordRole) return interaction.editReply({ embeds: [embed("Rank mapping missing", "Run `/syncrank set` for this Roblox role first, and make sure the Discord member is in this server.", danger)] });
+      if (!discordRole.editable) return interaction.editReply({ embeds: [embed("Role cannot be managed", `My bot role must be above **${discordRole.name}** in the server role list.`, danger)] });
+      await discordMember.roles.add(discordRole, `Roblox rank sync for ${robloxUser.name}`);
+      return interaction.editReply({ embeds: [embed("Rank synced", `**${robloxUser.name}** is **${groupRole.name}** in Roblox.\nAdded **${discordRole.name}** to ${discordMember}.`, success)] });
+    }
     if (interaction.commandName === "ban" || interaction.commandName === "kick") {
       const user = interaction.options.getUser("user", true);
       const target = await interaction.guild.members.fetch(user.id).catch(() => null);
