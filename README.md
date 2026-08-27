@@ -1,31 +1,37 @@
 # Aegis Discord Bot
 
-A focused Discord community bot with moderation, giveaways, private support tickets, and server setup commands. No database or dashboard.
+A focused Discord community bot with moderation, giveaways, and private support tickets. It uses no database and has no dashboard to maintain.
 
-## Commands
+## Features
 
 - Moderation: `/ban`, `/kick`, `/timeout`, `/warn`, `/purge`, `/lock`, `/unlock`, `/slowmode`
 - Giveaways: `/giveaway start`, `/giveaway end`, `/giveaway reroll`
-- Tickets: `/ticket-panel`
-- Server layout: `.setupchannels`
-- Channel permissions: `.permschannels`
-- Help: `/help`
+- Tickets: `/ticket-panel`, then members open private channels with one button
+- `/help` command with a quick command guide
+- `.setupchannels` chat command for the HACKATHONS, TEAM FINDER, and STARTUPS channel layout
+- `.permschannels` chat command for public/read-only channel rules and bot permissions
+- Railway health endpoint on the platform-provided `PORT`
+- Polished, consistent embeds with useful success/error feedback
 
-## Server setup
+## Local setup
 
-Run `.setupchannels` with Manage Server to create the HACKATHONS, TEAM FINDER, and STARTUPS categories and channels. It skips anything already present.
+1. Create a Discord application and bot in the Discord Developer Portal.
+2. Enable the **Server Members Intent** and **Message Content Intent** in the Discord Developer Portal.
+3. Copy `.env.example` to your environment and add `TOKEN` (`DISCORD_TOKEN` also works).
+4. Run `pnpm install`, then `pnpm --filter @workspace/api-server run dev`.
 
-Run `.permschannels` with Manage Server to apply public channel permissions, make alerts and results read-only, and explicitly grant the bot the permissions it needs. Add `MOD_ROLE_ID` if you want a moderator role to receive access and message-management permissions too.
+Set `DISCORD_GUILD_ID` during development for instant slash-command updates. Without it, commands are registered globally and Discord can take a while to propagate them.
 
-Enable **Server Members Intent** and **Message Content Intent** in the Discord Developer Portal.
+## Roblox commands
 
-## Deploy to Railway
+Set `ROBLOX_GROUP_ID` and the three `ROBUX_ITEM_*` values to make `/check`, `/rank`, and `/robux` use your real group and shirts. Set the payment variables to make `/payments` show your real payment details. `/syncrank set` creates an in-memory mapping between a Roblox group role and Discord role; run it again after a restart.
 
-1. Create a Discord application and bot.
-2. Invite it with the `bot` and `applications.commands` scopes.
-3. Give it Manage Channels, Manage Messages, Moderate Members, Kick Members, and Ban Members.
-4. Deploy this repository to Railway.
-5. Add your Railway secret as `TOKEN`. `DISCORD_TOKEN` is also supported.
-6. Optionally add `DISCORD_GUILD_ID`, `TICKET_ROLE_ID`, and `MOD_ROLE_ID`.
+## Railway setup
 
-Railway provides `PORT` automatically. Active giveaways and warnings are held in memory, so a restart clears them.
+Deploy the repository with the included `railway.json`. Add `TOKEN` as a Railway secret (`DISCORD_TOKEN` is also supported). `DISCORD_GUILD_ID`, `TICKET_ROLE_ID`, and `MOD_ROLE_ID` are optional variables. Railway supplies `PORT` automatically.
+
+The bot keeps active giveaways and warnings in memory by design. A restart clears them; there is intentionally no database or external state service.
+
+## Discord permissions
+
+Invite the bot with the `bot` and `applications.commands` scopes. Give it `Manage Channels`, `Manage Messages`, `Moderate Members`, `Kick Members`, `Ban Members`, and `Manage Roles` as needed. Its role must be above members it moderates.
