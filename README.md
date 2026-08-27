@@ -22,10 +22,6 @@ A focused Discord community bot with moderation, giveaways, and private support 
 
 Set `DISCORD_GUILD_ID` during development for instant slash-command updates. Without it, commands are registered globally and Discord can take a while to propagate them.
 
-## Roblox commands
-
-Set `ROBLOX_GROUP_ID` and the three `ROBUX_ITEM_*` values to make `/check`, `/rank`, and `/robux` use your real group and shirts. Set the payment variables to make `/payments` show your real payment details. `/syncrank set` creates an in-memory mapping between a Roblox group role and Discord role; run it again after a restart.
-
 ## Railway setup
 
 Deploy the repository with the included `railway.json`. Add `TOKEN` as a Railway secret (`DISCORD_TOKEN` is also supported). `DISCORD_GUILD_ID`, `TICKET_ROLE_ID`, and `MOD_ROLE_ID` are optional variables. Railway supplies `PORT` automatically.
