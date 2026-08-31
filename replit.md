@@ -1,4 +1,4 @@
-# Aegis Discord Bot
+# Streets of LA Discord Bot
 
 A Railway-friendly Discord community bot for moderation, giveaways, and private support tickets without a database.
 
