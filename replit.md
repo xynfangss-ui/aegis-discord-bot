@@ -28,12 +28,12 @@ A Railway-friendly Discord community bot for moderation, giveaways, and private 
 ## Architecture decisions
 
 - No database or external state service is used by design.
-- Giveaways, warnings, and invite counts are in memory, so a process restart clears them.
+- Giveaways, warnings, invite counts, and the welcome channel are in memory, so a process restart clears them.
 - Guild command registration is used when `DISCORD_GUILD_ID` exists; otherwise commands are global.
 
 ## Product
 
-Moderators get slash commands for bans, kicks, timeouts, warnings, purges, locks, unlocks, and slowmode. Server managers can start and manage button-entry giveaways and post the ticket panel. Members can open private tickets visible to them and configured staff roles, and use `/invites` to see confirmed joins from their invite links.
+Moderators get slash commands for bans, kicks, timeouts, warnings, purges, locks, unlocks, and slowmode. Server managers can start and manage button-entry giveaways, post the ticket panel, and run `.welcomesetup` to choose a welcome channel. Members can open private tickets visible to them and configured staff roles, use `/invites` to see confirmed joins from their invite links, and receive welcome messages when they join.
 
 ## User preferences
 
