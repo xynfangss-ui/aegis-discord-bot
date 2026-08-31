@@ -33,6 +33,7 @@ const giveaways = new Map<string, Giveaway>();
 const endedGiveaways = new Map<string, Giveaway>();
 const inviteCache = new Map<string, Map<string, { uses: number; inviterId?: string }>>();
 const inviteCounts = new Map<string, Map<string, number>>();
+const welcomeChannels = new Map<string, string>();
 
 const durationMs = (input: string) => {
   const match = input.trim().match(/^(\d+)\s*(s|m|h|d)$/i);
@@ -170,6 +171,31 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
+client.on(Events.GuildMemberAdd, async (member) => {
+  const channelId = welcomeChannels.get(member.guild.id);
+  if (!channelId) return;
+
+  try {
+    const channel = await member.guild.channels.fetch(channelId).catch(() => null);
+    if (!channel?.isTextBased() || !("send" in channel)) return;
+    const welcomeEmbed = new EmbedBuilder()
+      .setColor(brand)
+      .setAuthor({ name: "Streets of LA" })
+      .setTitle(`Welcome to ${member.guild.name}!`)
+      .setDescription(`Hey ${member}, welcome to the community. We’re glad you’re here.`)
+      .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: "New member", value: `${member.user.tag}`, inline: true },
+        { name: "Member number", value: `#${member.guild.memberCount}`, inline: true },
+      )
+      .setFooter({ text: "Read the rules, introduce yourself, and enjoy your stay." })
+      .setTimestamp();
+    await channel.send({ content: `Welcome ${member}!`, embeds: [welcomeEmbed], allowedMentions: { users: [member.id] } });
+  } catch (error) {
+    console.warn(`Could not send a welcome message for ${member.user.tag}.`, error);
+  }
+});
+
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || message.content.trim().toLowerCase() !== ".setupchannels" || !message.guild) return;
   if (!message.member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -297,6 +323,25 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot || message.content.trim().toLowerCase() !== ".welcomesetup" || !message.guild) return;
+  if (!message.member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    await message.reply("You need **Manage Server** permission to run `.welcomesetup`.");
+    return;
+  }
+
+  welcomeChannels.set(message.guild.id, message.channel.id);
+  await message.reply({
+    embeds: [
+      embed(
+        "Welcome messages enabled",
+        `New members will now receive a welcome message in ${message.channel}.\n\nRun \`.welcomesetup\` in a different channel to move welcome messages there.`,
+        success,
+      ),
+    ],
+  });
+});
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isButton() && interaction.customId === "ticket:create") {
@@ -348,7 +393,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     const member = interaction.member as GuildMember;
     if (interaction.commandName === "help") {
-      return interaction.reply({ embeds: [embed("Streets of LA command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel` `/invites`\n\n**Server setup**\n`.setupchannels` `.permschannels`")], ephemeral: true });
+      return interaction.reply({ embeds: [embed("Streets of LA command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel` `/invites`\n\n**Server setup**\n`.setupchannels` `.permschannels` `.welcomesetup`")], ephemeral: true });
     }
     if (interaction.commandName === "ping") {
       const roundTrip = Date.now() - interaction.createdTimestamp;
