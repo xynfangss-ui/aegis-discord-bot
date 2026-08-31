@@ -9,6 +9,7 @@ import {
   EmbedBuilder,
   Events,
   GatewayIntentBits,
+  Guild,
   GuildMember,
   ModalBuilder,
   PermissionFlagsBits,
@@ -30,6 +31,8 @@ const warnings = new Map<string, string[]>();
 type Giveaway = { channelId: string; prize: string; winners: number; endsAt: number; participants: Set<string>; timer?: NodeJS.Timeout };
 const giveaways = new Map<string, Giveaway>();
 const endedGiveaways = new Map<string, Giveaway>();
+const inviteCache = new Map<string, Map<string, { uses: number; inviterId?: string }>>();
+const inviteCounts = new Map<string, Map<string, number>>();
 
 const durationMs = (input: string) => {
   const match = input.trim().match(/^(\d+)\s*(s|m|h|d)$/i);
@@ -41,9 +44,26 @@ const durationMs = (input: string) => {
 const embed = (title: string, description: string, color = brand) =>
   new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).setTimestamp();
 
+const ticketStaffRoleIds = () =>
+  [...new Set([process.env.TICKET_ROLE_ID, process.env.MOD_ROLE_ID].filter((id): id is string => Boolean(id)))];
+
+const cacheGuildInvites = async (guild: Guild) => {
+  try {
+    const invites = await guild.invites.fetch();
+    inviteCache.set(
+      guild.id,
+      new Map(invites.map((invite) => [invite.code, { uses: invite.uses ?? 0, inviterId: invite.inviter?.id }])),
+    );
+  } catch (error) {
+    console.warn(`Invite tracking unavailable for ${guild.name}. The bot needs Manage Server permission.`, error);
+  }
+};
+
 const commands = [
   new SlashCommandBuilder().setName("help").setDescription("See all bot commands."),
   new SlashCommandBuilder().setName("ping").setDescription("Check bot and Discord API latency."),
+  new SlashCommandBuilder().setName("invites").setDescription("See how many members joined using your invite.")
+    .addUserOption((o) => o.setName("member").setDescription("Staff can check another member").setRequired(false)),
   new SlashCommandBuilder().setName("ban").setDescription("Ban a member.")
     .addUserOption((o) => o.setName("user").setDescription("Member to ban").setRequired(true))
     .addStringOption((o) => o.setName("reason").setDescription("Why they are being banned").setRequired(false)),
@@ -114,7 +134,40 @@ const registerCommands = async () => {
 
 client.once(Events.ClientReady, async () => {
   await registerCommands();
+  await Promise.all(client.guilds.cache.map((guild) => cacheGuildInvites(guild)));
   console.info(`Logged in as ${client.user?.tag}. Commands registered.`);
+});
+
+client.on(Events.GuildCreate, async (guild) => {
+  await cacheGuildInvites(guild);
+});
+
+client.on(Events.GuildMemberAdd, async (member) => {
+  try {
+    const invites = await member.guild.invites.fetch();
+    const previous = inviteCache.get(member.guild.id) || new Map<string, { uses: number; inviterId?: string }>();
+    let usedInvite: { uses: number; inviterId?: string } | undefined;
+
+    for (const invite of invites.values()) {
+      const oldInvite = previous.get(invite.code);
+      if ((invite.uses ?? 0) > (oldInvite?.uses ?? 0) && (!usedInvite || (invite.uses ?? 0) > usedInvite.uses)) {
+        usedInvite = { uses: invite.uses ?? 0, inviterId: invite.inviter?.id };
+      }
+    }
+
+    inviteCache.set(
+      member.guild.id,
+      new Map(invites.map((invite) => [invite.code, { uses: invite.uses ?? 0, inviterId: invite.inviter?.id }])),
+    );
+
+    if (!usedInvite?.inviterId) return;
+    const guildCounts = inviteCounts.get(member.guild.id) || new Map<string, number>();
+    guildCounts.set(usedInvite.inviterId, (guildCounts.get(usedInvite.inviterId) || 0) + 1);
+    inviteCounts.set(member.guild.id, guildCounts);
+    console.info(`${member.user.tag} joined ${member.guild.name} through invite owner ${usedInvite.inviterId}.`);
+  } catch (error) {
+    console.warn(`Could not determine the invite used by ${member.user.tag} in ${member.guild.name}.`, error);
+  }
 });
 
 client.on(Events.MessageCreate, async (message) => {
@@ -257,7 +310,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         permissionOverwrites: [
           { id: interaction.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
           { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-          ...(process.env.TICKET_ROLE_ID ? [{ id: process.env.TICKET_ROLE_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }] : []),
+          ...ticketStaffRoleIds().map((id) => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] })),
         ],
       });
       const close = new ButtonBuilder().setCustomId("ticket:close").setLabel("Close ticket").setStyle(ButtonStyle.Danger);
@@ -265,6 +318,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return interaction.reply({ content: `Your ticket is ready: ${channel}`, ephemeral: true });
     }
     if (interaction.isButton() && interaction.customId === "ticket:close") {
+      const staffMember = interaction.member as GuildMember;
+      const isStaff = staffMember.permissions.has(PermissionFlagsBits.ManageGuild) || ticketStaffRoleIds().some((id) => staffMember.roles.cache.has(id));
+      if (!isStaff) return interaction.reply({ content: "Only staff can close support tickets.", ephemeral: true });
       await interaction.reply({ embeds: [embed("Ticket closed", "This channel will be removed in 5 seconds.", danger)] });
       setTimeout(() => interaction.channel?.delete().catch(() => undefined), 5000);
       return;
@@ -279,13 +335,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     const member = interaction.member as GuildMember;
     if (interaction.commandName === "help") {
-      return interaction.reply({ embeds: [embed("Aegis command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel`\n\n**Server setup**\n`.setupchannels` `.permschannels`")], ephemeral: true });
+      return interaction.reply({ embeds: [embed("Aegis command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel` `/invites`\n\n**Server setup**\n`.setupchannels` `.permschannels`")], ephemeral: true });
     }
     if (interaction.commandName === "ping") {
       const roundTrip = Date.now() - interaction.createdTimestamp;
       return interaction.reply({ embeds: [embed("Pong", `Bot latency: **${roundTrip}ms**\nDiscord API latency: **${client.ws.ping}ms**`, success)] });
     }
     if (!interaction.guild) return interaction.reply({ content: "This command only works inside a server.", ephemeral: true });
+    if (interaction.commandName === "invites") {
+      const requestedMember = interaction.options.getMember("member");
+      const requestedUser = interaction.options.getUser("member") || interaction.user;
+      const canViewOthers = member.permissions.has(PermissionFlagsBits.ManageGuild);
+      if (requestedUser.id !== interaction.user.id && !canViewOthers) {
+        return interaction.reply({ content: "You can only view your own invite count.", ephemeral: true });
+      }
+      const count = inviteCounts.get(interaction.guild.id)?.get(requestedUser.id) || 0;
+      return interaction.reply({
+        embeds: [
+          embed(
+            "Invite tracker",
+            `${requestedMember || requestedUser} has **${count}** confirmed member join${count === 1 ? "" : "s"} from their invite links.\n\nInvite counts are tracked in memory and reset if the bot restarts.`,
+            success,
+          ),
+        ],
+      });
+    }
     if (interaction.commandName === "ban" || interaction.commandName === "kick") {
       const user = interaction.options.getUser("user", true);
       const target = await interaction.guild.members.fetch(user.id).catch(() => null);
