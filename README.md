@@ -11,6 +11,7 @@ A focused Discord community bot with moderation, giveaways, and private support 
 - `/help` command with a quick command guide
 - `.setupchannels` chat command for the HACKATHONS, TEAM FINDER, and STARTUPS channel layout
 - `.permschannels` chat command for public/read-only channel rules and bot permissions
+- `.welcomesetup` chat command to enable welcome messages in the channel where it is run
 - Railway health endpoint on the platform-provided `PORT`
 - Polished, consistent embeds with useful success/error feedback
 
@@ -23,13 +24,13 @@ A focused Discord community bot with moderation, giveaways, and private support 
 
 Set `DISCORD_GUILD_ID` during development for instant slash-command updates. Without it, commands are registered globally and Discord can take a while to propagate them.
 
-The ticket panel is posted by staff, and each ticket is private to the member who opened it plus `TICKET_ROLE_ID` and `MOD_ROLE_ID` when configured. Staff roles can close tickets. Invite tracking compares invite usage when a member joins; vanity URL and unavailable invite data cannot be attributed.
+The ticket panel is posted by staff, and each ticket is private to the member who opened it plus `TICKET_ROLE_ID` and `MOD_ROLE_ID` when configured. Staff roles can close tickets. Run `.welcomesetup` in the channel where you want new-member welcomes; run it again elsewhere to move them. Invite tracking compares invite usage when a member joins; vanity URL and unavailable invite data cannot be attributed.
 
 ## Railway setup
 
 Deploy the repository with the included `railway.json`. Add `TOKEN` as a Railway secret (`DISCORD_TOKEN` is also supported). `DISCORD_GUILD_ID`, `TICKET_ROLE_ID`, and `MOD_ROLE_ID` are optional variables. Railway supplies `PORT` automatically.
 
-The bot keeps active giveaways, warnings, and invite counts in memory by design. A restart clears them; there is intentionally no database or external state service.
+The bot keeps active giveaways, warnings, invite counts, and the welcome channel in memory by design. A restart clears them; there is intentionally no database or external state service.
 
 ## Discord permissions
 
