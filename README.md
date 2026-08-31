@@ -1,4 +1,4 @@
-# Aegis Discord Bot
+# Streets of LA Discord Bot
 
 A focused Discord community bot with moderation, giveaways, and private support tickets. It uses no database and has no dashboard to maintain.
 
