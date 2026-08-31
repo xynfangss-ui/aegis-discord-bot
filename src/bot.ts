@@ -307,14 +307,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
         name: `ticket-${interaction.user.username.toLowerCase()}`.slice(0, 90),
         type: ChannelType.GuildText,
         parent: process.env.TICKET_CATEGORY_ID || undefined,
+        topic: `Private support ticket for ${interaction.user.tag}`,
         permissionOverwrites: [
           { id: interaction.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
           { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
           ...ticketStaffRoleIds().map((id) => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] })),
         ],
       });
-      const close = new ButtonBuilder().setCustomId("ticket:close").setLabel("Close ticket").setStyle(ButtonStyle.Danger);
-      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed("Ticket opened", "Thanks for reaching out. Tell the team what you need help with.\n\nA moderator can close this ticket when you are done.")], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(close)] });
+      const close = new ButtonBuilder().setCustomId("ticket:close").setEmoji("🔒").setLabel("Close ticket").setStyle(ButtonStyle.Danger);
+      const openedEmbed = new EmbedBuilder()
+        .setColor(success)
+        .setAuthor({ name: "Aegis Support" })
+        .setTitle("Support ticket opened")
+        .setDescription("Thanks for reaching out. A staff member will be with you shortly.")
+        .addFields(
+          { name: "What to include", value: "Explain what you need help with and include any relevant screenshots or details.", inline: false },
+          { name: "Ticket owner", value: `<@${interaction.user.id}>`, inline: true },
+          { name: "Next step", value: "A staff member will reply here.", inline: true },
+        )
+        .setFooter({ text: "Only staff can close this ticket." })
+        .setTimestamp();
+      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [openedEmbed], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(close)] });
       return interaction.reply({ content: `Your ticket is ready: ${channel}`, ephemeral: true });
     }
     if (interaction.isButton() && interaction.customId === "ticket:close") {
@@ -350,14 +363,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.reply({ content: "You can only view your own invite count.", ephemeral: true });
       }
       const count = inviteCounts.get(interaction.guild.id)?.get(requestedUser.id) || 0;
+      const inviteEmbed = new EmbedBuilder()
+        .setColor(success)
+        .setAuthor({ name: "Aegis Invite Tracker" })
+        .setTitle(`${requestedUser.username}'s invite stats`)
+        .setThumbnail(requestedUser.displayAvatarURL({ size: 256 }))
+        .setDescription(`${requestedMember || requestedUser} has brought **${count}** confirmed member${count === 1 ? "" : "s"} to the server.`)
+        .addFields(
+          { name: "Confirmed joins", value: `**${count}**`, inline: true },
+          { name: "Tracking status", value: count ? "Active" : "No confirmed joins yet", inline: true },
+        )
+        .setFooter({ text: "Counts reset when the bot restarts." })
+        .setTimestamp();
       return interaction.reply({
-        embeds: [
-          embed(
-            "Invite tracker",
-            `${requestedMember || requestedUser} has **${count}** confirmed member join${count === 1 ? "" : "s"} from their invite links.\n\nInvite counts are tracked in memory and reset if the bot restarts.`,
-            success,
-          ),
-        ],
+        embeds: [inviteEmbed],
       });
     }
     if (interaction.commandName === "ban" || interaction.commandName === "kick") {
@@ -406,8 +425,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return interaction.reply({ embeds: [embed("Slowmode updated", seconds ? `Members can send one message every **${seconds}s**.` : "Slowmode is disabled.", success)] });
     }
     if (interaction.commandName === "ticket-panel") {
-      const button = new ButtonBuilder().setCustomId("ticket:create").setLabel("Open a ticket").setStyle(ButtonStyle.Primary);
-      return interaction.reply({ embeds: [embed("Need a hand?", "Press the button below to open a private support ticket. Please include as much detail as possible so the team can help quickly.")], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(button)] });
+      const button = new ButtonBuilder().setCustomId("ticket:create").setEmoji("🎫").setLabel("Create support ticket").setStyle(ButtonStyle.Primary);
+      const panel = new EmbedBuilder()
+        .setColor(brand)
+        .setAuthor({ name: "Aegis Support Center" })
+        .setTitle("Need help from staff?")
+        .setDescription("Open a private support ticket and our team will help you as soon as possible.")
+        .addFields(
+          { name: "How it works", value: "Click **Create support ticket**, explain what you need, and wait for a staff reply.", inline: false },
+          { name: "Please include", value: "A clear description, screenshots, usernames, or any other details that can help us solve the issue.", inline: false },
+        )
+        .setFooter({ text: "One open ticket per member • Staff only" })
+        .setTimestamp();
+      return interaction.reply({ embeds: [panel], components: [new ActionRowBuilder<ButtonBuilder>().addComponents(button)] });
     }
     if (interaction.commandName === "giveaway") {
       const sub = interaction.options.getSubcommand();
