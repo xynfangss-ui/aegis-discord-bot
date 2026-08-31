@@ -317,7 +317,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const close = new ButtonBuilder().setCustomId("ticket:close").setEmoji("🔒").setLabel("Close ticket").setStyle(ButtonStyle.Danger);
       const openedEmbed = new EmbedBuilder()
         .setColor(success)
-        .setAuthor({ name: "Aegis Support" })
+        .setAuthor({ name: "Streets of LA Support" })
         .setTitle("Support ticket opened")
         .setDescription("Thanks for reaching out. A staff member will be with you shortly.")
         .addFields(
@@ -348,7 +348,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     const member = interaction.member as GuildMember;
     if (interaction.commandName === "help") {
-      return interaction.reply({ embeds: [embed("Aegis command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel` `/invites`\n\n**Server setup**\n`.setupchannels` `.permschannels`")], ephemeral: true });
+      return interaction.reply({ embeds: [embed("Streets of LA command center", "**Moderation**\n`/ban` `/kick` `/timeout` `/warn` `/purge` `/lock` `/unlock` `/slowmode`\n\n**Community**\n`/giveaway start` `/giveaway end` `/giveaway reroll` `/ticket-panel` `/invites`\n\n**Server setup**\n`.setupchannels` `.permschannels`")], ephemeral: true });
     }
     if (interaction.commandName === "ping") {
       const roundTrip = Date.now() - interaction.createdTimestamp;
@@ -365,7 +365,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const count = inviteCounts.get(interaction.guild.id)?.get(requestedUser.id) || 0;
       const inviteEmbed = new EmbedBuilder()
         .setColor(success)
-        .setAuthor({ name: "Aegis Invite Tracker" })
+        .setAuthor({ name: "Streets of LA Invite Tracker" })
         .setTitle(`${requestedUser.username}'s invite stats`)
         .setThumbnail(requestedUser.displayAvatarURL({ size: 256 }))
         .setDescription(`${requestedMember || requestedUser} has brought **${count}** confirmed member${count === 1 ? "" : "s"} to the server.`)
@@ -428,7 +428,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const button = new ButtonBuilder().setCustomId("ticket:create").setEmoji("🎫").setLabel("Create support ticket").setStyle(ButtonStyle.Primary);
       const panel = new EmbedBuilder()
         .setColor(brand)
-        .setAuthor({ name: "Aegis Support Center" })
+        .setAuthor({ name: "Streets of LA Support Center" })
         .setTitle("Need help from staff?")
         .setDescription("Open a private support ticket and our team will help you as soon as possible.")
         .addFields(
@@ -475,7 +475,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 const port = Number(process.env.PORT || 3000);
 createServer((_request, response) => {
   response.writeHead(200, { "content-type": "application/json" });
-  response.end(JSON.stringify({ ok: true, service: "aegis-discord-bot", uptime: process.uptime() }));
+  response.end(JSON.stringify({ ok: true, service: "streets-of-la-bot", uptime: process.uptime() }));
 }).listen(port, "0.0.0.0", () => console.info(`Railway health server listening on ${port}`));
 
 client.login(token);
